@@ -1,30 +1,24 @@
-import os
 import numpy as np
 import time
-import sys
 
 import torch
-import torch.nn as nn
 import torch.backends.cudnn as cudnn
-import torchvision
 import torchvision.transforms as transforms
 import torch.optim as optim
-import torch.nn.functional as tfunc
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-import torch.nn.functional as func
 
 from sklearn.metrics.ranking import roc_auc_score
 
 from DensenetModels import DenseNet121
 from DensenetModels import DenseNet169
-from DensenetModels import DenseNet201
 from DensenetModels import ResNet50
 from DensenetModels import SE_ResNet50
 from DensenetModels import SE_DenseNet121
 from DatasetGenerator import DatasetGenerator
 
 
+DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 #--------------------------------------------------------------------------------
 
@@ -44,23 +38,22 @@ class ChexnetTrainer ():
     #---- launchTimestamp - date/time, used to assign unique name for the checkpoint file
     #---- checkpoint - if not None loads the model and continues training
 
-    def train (pathDirData, pathFileTrain, pathFileVal, nnArchitecture, nnIsTrained, nnClassCount, trBatchSize, trMaxEpoch, transResize, transCrop, launchTimestamp, checkpoint):
+    def train_model (pathDirData, pathFileTrain, pathFileVal, nnArchitecture, nnIsTrained, nnClassCount, trBatchSize, trMaxEpoch, transResize, transCrop, launchTimestamp, checkpoint):
 
+        model = None
 
         #-------------------- SETTINGS: NETWORK ARCHITECTURE
-        if nnArchitecture == 'DENSE-NET-121': model = DenseNet121(nnClassCount, nnIsTrained).cuda()
-        elif nnArchitecture == 'DENSE-NET-169': model = DenseNet169(nnClassCount, nnIsTrained).cuda()
-        elif nnArchitecture == 'RES-NET-50': model = ResNet50(nnClassCount, nnIsTrained).cuda()
-        elif nnArchitecture == 'SE-RES-NET-50': model = SE_ResNet50(nnClassCount, nnIsTrained).cuda()
-        elif nnArchitecture == 'SE-DENSE-NET-121': model = SE_DenseNet121(nnClassCount, nnIsTrained).cuda()
+        if nnArchitecture == 'DENSE-NET-121': model = DenseNet121(nnClassCount, nnIsTrained)
+        elif nnArchitecture == 'DENSE-NET-169': model = DenseNet169(nnClassCount, nnIsTrained)
+        elif nnArchitecture == 'RES-NET-50': model = ResNet50(nnClassCount, nnIsTrained)
+        elif nnArchitecture == 'SE-RES-NET-50': model = SE_ResNet50(nnClassCount, nnIsTrained)
+        elif nnArchitecture == 'SE-DENSE-NET-121': model = SE_DenseNet121(nnClassCount, nnIsTrained)
 
+        if model is not None and DEVICE == 'cuda':
+            model = model.cuda()
 
-
-
-
-
-
-        model = torch.nn.DataParallel(model).cuda()
+        if DEVICE == 'cuda':
+            model = torch.nn.DataParallel(model).cuda()
 
         #-------------------- SETTINGS: DATA TRANSFORMS
         normalize = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
@@ -88,18 +81,21 @@ class ChexnetTrainer ():
         #-------------------- SETTINGS: LOSS
         loss = torch.nn.BCELoss(size_average = True)
 
+        epoch_id_next = 0
+
         #---- Load checkpoint
-        if checkpoint != None:
-            modelCheckpoint = torch.load(checkpoint)
+        if checkpoint is not None:
+            modelCheckpoint = torch.load(checkpoint, map_location=torch.device(DEVICE))
             model.load_state_dict(modelCheckpoint['state_dict'])
             optimizer.load_state_dict(modelCheckpoint['optimizer'])
+            epoch_id_next = modelCheckpoint['epoch'] + 1
 
 
         #---- TRAIN THE NETWORK
 
         lossMIN = 100000
 
-        for epochID in range (0, trMaxEpoch):
+        for epochID in range (epoch_id_next, trMaxEpoch):
 
             timestampTime = time.strftime("%H%M%S")
             timestampDate = time.strftime("%d%m%Y")
@@ -129,7 +125,8 @@ class ChexnetTrainer ():
 
         for batchID, (input, target) in enumerate (dataLoader):
 
-            target = target.cuda()
+            if DEVICE == 'cuda':
+                target = target.cuda()
 
             varInput = torch.autograd.Variable(input)
             varTarget = torch.autograd.Variable(target)
@@ -154,7 +151,8 @@ class ChexnetTrainer ():
 
         for i, (input, target) in enumerate (dataLoader):
 
-            target = target.cuda()
+            if DEVICE == 'cuda':
+                target = target.cuda()
 
             varInput = torch.autograd.Variable(input, volatile=True)
             varTarget = torch.autograd.Variable(target, volatile=True)
@@ -207,13 +205,15 @@ class ChexnetTrainer ():
     #---- launchTimestamp - date/time, used to assign unique name for the checkpoint file
     #---- checkpoint - if not None loads the model and continues training
 
-    def test (pathDirData, pathFileTest, pathModel, nnArchitecture, nnClassCount, nnIsTrained, trBatchSize, transResize, transCrop, launchTimeStamp):
+    def test_model (pathDirData, pathFileTest, pathModel, nnArchitecture, nnClassCount, nnIsTrained, trBatchSize, transResize, transCrop, launchTimeStamp):
 
 
         CLASS_NAMES = [ 'Atelectasis', 'Cardiomegaly', 'Effusion', 'Infiltration', 'Mass', 'Nodule', 'Pneumonia',
                 'Pneumothorax', 'Consolidation', 'Edema', 'Emphysema', 'Fibrosis', 'Pleural_Thickening', 'Hernia']
 
         cudnn.benchmark = True
+
+        model = None
 
         #-------------------- SETTINGS: NETWORK ARCHITECTURE, MODEL LOAD
         if nnArchitecture == 'DENSE-NET-121': model = DenseNet121(nnClassCount, nnIsTrained).cuda()
@@ -222,9 +222,8 @@ class ChexnetTrainer ():
         elif nnArchitecture == 'SE-RES-NET-50': model = SE_ResNet50(nnClassCount, nnIsTrained).cuda()
         elif nnArchitecture == 'SE-DENSE-NET-121': model = SE_DenseNet121(nnClassCount, nnIsTrained).cuda()
 
-
-
-        model = torch.nn.DataParallel(model).cuda()
+        if model is not None and DEVICE == 'cuda':
+            model = torch.nn.DataParallel(model).cuda()
 
         modelCheckpoint = torch.load(pathModel)
         model.load_state_dict(modelCheckpoint['state_dict'])
@@ -243,14 +242,21 @@ class ChexnetTrainer ():
         datasetTest = DatasetGenerator(pathImageDirectory=pathDirData, pathDatasetFile=pathFileTest, transform=transformSequence)
         dataLoaderTest = DataLoader(dataset=datasetTest, batch_size=trBatchSize, num_workers=8, shuffle=False, pin_memory=True)
 
-        outGT = torch.FloatTensor().cuda()
-        outPRED = torch.FloatTensor().cuda()
+
+        outGT = torch.FloatTensor()
+        outPRED = torch.FloatTensor()
+
+        if DEVICE == 'cuda':
+            outGT = cuda()
+            outPRED = cuda()
 
         model.eval()
 
         for i, (input, target) in enumerate(dataLoaderTest):
 
-            target = target.cuda()
+            if DEVICE == 'cuda':
+                target = target.cuda()
+
             outGT = torch.cat((outGT, target), 0)
 
             bs, n_crops, c, h, w = input.size()
@@ -270,6 +276,4 @@ class ChexnetTrainer ():
         for i in range (0, len(aurocIndividual)):
             print (CLASS_NAMES[i], ' ', aurocIndividual[i])
 
-
         return
-#--------------------------------------------------------------------------------

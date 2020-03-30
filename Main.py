@@ -38,8 +38,8 @@ def runTrain():
 
     #---- Neural network parameters: type of the network, is it pre-trained
     #---- on imagenet, number of classes
-    nnArchitecture = SE_DenseNet121
-    nnIsTrained =   False
+    nnArchitecture = DENSENET121
+    nnIsTrained = True
     nnClassCount = 14
 
     #---- Training settings: batch size, maximum number of epochs
@@ -51,13 +51,13 @@ def runTrain():
     imgtransCrop = 224
 
     pathModel = 'm-' + timestampLaunch + '.pth.tar'
-    #checkpoint = './models/m-21042019-055416.pth.tar'
+    # checkpoint = './models/m-25012018-123527.pth.tar'
 
     print ('Training NN architecture = ', nnArchitecture)
-    ChexnetTrainer.train(pathDirData, pathFileTrain, pathFileVal, nnArchitecture, nnIsTrained, nnClassCount, trBatchSize, trMaxEpoch, imgtransResize, imgtransCrop, timestampLaunch, None)
+    ChexnetTrainer.train_model(pathDirData, pathFileTrain, pathFileVal, nnArchitecture, nnIsTrained, nnClassCount, trBatchSize, trMaxEpoch, imgtransResize, imgtransCrop, timestampLaunch, None)
 
     print ('Testing the trained model')
-    ChexnetTrainer.test(pathDirData, pathFileTest, pathModel, nnArchitecture, nnClassCount, nnIsTrained, trBatchSize, imgtransResize, imgtransCrop, timestampLaunch)
+    ChexnetTrainer.test_model(pathDirData, pathFileTest, pathModel, nnArchitecture, nnClassCount, nnIsTrained, trBatchSize, imgtransResize, imgtransCrop, timestampLaunch)
 
 #--------------------------------------------------------------------------------
 
