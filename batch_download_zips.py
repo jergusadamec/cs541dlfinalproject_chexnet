@@ -1,26 +1,66 @@
 # Download the 56 zip files in Images_png in batches
-import urllib.request
+import argparse
+import gzip
+import shutil
+from io import BytesIO
+from multiprocessing import cpu_count
+from multiprocessing.pool import ThreadPool
+from time import sleep
+
+import numpy as np
+import requests
+
+
+def parse_args ():
+	arg_parser = argparse.ArgumentParser(description='Parser')
+
+	arg_parser.add_argument('--archives-directory', type=str, metavar='archives_directory', default='./database/',
+							help='')
+
+	return arg_parser.parse_args()
+
 
 # URLs for the zip files
-links = [
-    'https://nihcc.box.com/shared/static/vfk49d74nhbxq3nqjg0900w5nvkorp5c.gz',
-    'https://nihcc.box.com/shared/static/i28rlmbvmfjbl8p2n3ril0pptcmcu9d1.gz',
-    'https://nihcc.box.com/shared/static/f1t00wrtdk94satdfb9olcolqx20z2jp.gz',
+LINKS = [
+	'https://nihcc.box.com/shared/static/vfk49d74nhbxq3nqjg0900w5nvkorp5c.gz',
+	'https://nihcc.box.com/shared/static/i28rlmbvmfjbl8p2n3ril0pptcmcu9d1.gz',
+	'https://nihcc.box.com/shared/static/f1t00wrtdk94satdfb9olcolqx20z2jp.gz',
 	'https://nihcc.box.com/shared/static/0aowwzs5lhjrceb3qp67ahp0rd1l1etg.gz',
-    'https://nihcc.box.com/shared/static/v5e3goj22zr6h8tzualxfsqlqaygfbsn.gz',
-
+	'https://nihcc.box.com/shared/static/v5e3goj22zr6h8tzualxfsqlqaygfbsn.gz',
 	'https://nihcc.box.com/shared/static/asi7ikud9jwnkrnkj99jnpfkjdes7l6l.gz',
 	'https://nihcc.box.com/shared/static/jn1b4mw4n6lnh74ovmcjb8y48h8xj07n.gz',
-    'https://nihcc.box.com/shared/static/tvpxmn7qyrgl0w8wfh9kqfjskv6nmm1j.gz',
+	'https://nihcc.box.com/shared/static/tvpxmn7qyrgl0w8wfh9kqfjskv6nmm1j.gz',
 	'https://nihcc.box.com/shared/static/upyy3ml7qdumlgk2rfcvlb9k6gvqq2pj.gz',
 	'https://nihcc.box.com/shared/static/l6nilvfa9cg3s28tqv1qc1olm3gnz54p.gz',
 	'https://nihcc.box.com/shared/static/hhq8fkdgvcari67vfhs7ppg2w6ni4jze.gz',
 	'https://nihcc.box.com/shared/static/ioqwiy20ihqwyr8pf4c24eazhh281pbu.gz'
-
 ]
 
-for idx, link in enumerate(links):
-    fn = 'images_%03d.tar.gz' % (idx+1)
-    print ('downloading', fn, '...')
-    urllib.request.urlretrieve(link, fn)  # download the zip file
-print ("Download complete. Please check the checksums")
+
+def download_urls (link_ix):
+	try:
+		link = LINKS[link_ix]
+		response = requests.get(link)
+		print('DONE ' + str(link))
+
+		content = BytesIO(response.content)
+
+		out_path = 'images_%03d' % (link_ix + 1)
+		with gzip.open(content, 'r') as file_in, open(args.archives_directory + out_path, 'wb') as file_out:
+			shutil.copyfileobj(file_in, file_out)
+
+		sleep(np.random.randint(1, 3))
+
+	except Exception as e:
+		print(e)
+
+
+if __name__ == "__main__":
+	args = parse_args()
+	print('Archives will be downloaded under ' + str(args.archives_directory) + ' directory.')
+	with ThreadPool(cpu_count()) as pool:
+		list(pool.imap_unordered(
+				download_urls,
+				(link_ix for link_ix in range(len(LINKS))),
+				chunksize=1
+		))
